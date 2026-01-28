@@ -1,0 +1,409 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UDL In-Service Sorting (Grouped Cards)</title>
+<style>
+    :root {
+        --eng-border: #33691e;
+        --rep-border: #4a148c;
+        --exp-border: #0d47a1;
+        /* CARD SIZE */
+        --card-width: 400px; 
+        --card-height: 280px; 
+    }
+
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #fafafa;
+        color: #333;
+        margin: 0;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 100vh;
+    }
+
+    h1 { margin-bottom: 5px; }
+    p { margin-bottom: 20px; text-align: center; max-width: 800px; line-height: 1.5; }
+
+    /* --- DROP ZONES AREA --- */
+    .drop-container {
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        width: 100%;
+        max-width: 1600px; 
+        gap: 20px;
+        margin-bottom: 40px;
+        flex-grow: 1; 
+    }
+
+    .drop-zone {
+        flex: 1;
+        border: 3px dashed #ccc;
+        border-radius: 12px;
+        padding: 15px;
+        min-height: 400px;
+        transition: background-color 0.3s ease;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        background-color: #fff;
+    }
+
+    .zone-header {
+        text-align: center;
+        font-weight: bold;
+        font-size: 1.4em;
+        padding-bottom: 10px;
+        border-bottom: 2px solid rgba(0,0,0,0.1);
+        margin-bottom: 10px;
+        pointer-events: none; 
+    }
+
+    .sub-header {
+        display: block;
+        font-size: 0.7em;
+        font-weight: normal;
+        margin-top: 5px;
+        font-style: italic;
+        color: #555;
+    }
+
+    /* Zone Colors */
+    #zone-engagement { border-color: var(--eng-border); background-color: #f1f8e9; }
+    #zone-representation { border-color: var(--rep-border); background-color: #f3e5f5; }
+    #zone-expression { border-color: var(--exp-border); background-color: #e3f2fd; }
+
+    /* --- THE STACK PILE --- */
+    .pile-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
+        margin-bottom: 50px; 
+    }
+
+    /* This container holds the stack */
+    #card-pile {
+        position: relative;
+        width: var(--card-width);
+        height: var(--card-height); 
+        border: 2px dashed #aaa;
+        border-radius: 8px;
+        background-color: #eee;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    #card-pile::before {
+        content: "Card Pile Empty";
+        color: #999;
+        position: absolute;
+        z-index: 0;
+    }
+
+    /* --- CARD STYLES --- */
+    .card {
+        background-color: #fff;
+        border: 1px solid #bbb;
+        border-left: 8px solid #555; 
+        border-radius: 6px;
+        padding: 15px;
+        font-size: 1em; 
+        line-height: 1.5;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        user-select: none;
+        cursor: grab;
+        box-sizing: border-box;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        word-wrap: break-word;
+    }
+
+    /* CARD IN STACK (Absolute) */
+    #card-pile .card {
+        position: absolute;
+        width: 100%;
+        height: 100%; 
+        overflow-y: auto; 
+        top: 0;
+        left: 0;
+        z-index: 10;
+    }
+
+    /* Visual stack effect */
+    #card-pile .card:nth-last-child(1) { transform: rotate(0deg); }
+    #card-pile .card:nth-last-child(2) { transform: rotate(-2deg); margin-top: 2px; z-index: 9; }
+    #card-pile .card:nth-last-child(3) { transform: rotate(2deg); margin-top: 4px; z-index: 8; }
+    #card-pile .card:nth-last-child(n+4) { display: none; }
+
+    /* CARD IN DROP ZONE (Relative) */
+    .drop-zone .card {
+        position: relative; 
+        width: 100%;
+        height: auto; 
+        margin-bottom: 10px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    .card:active { cursor: grabbing; transform: scale(1.01) !important; z-index: 100 !important; }
+
+    /* HTML Formatting inside cards */
+    .card b { display: block; margin-bottom: 8px; color: #000; font-size: 1.1em; text-decoration: underline; text-decoration-color: #ccc;}
+    .card ul { margin: 5px 0 0 10px; padding-left: 15px; }
+    .card li { margin-bottom: 4px; }
+    
+    /* MODIFIED: Changed color from red to black */
+    .card .ex-label { color: #000; font-weight: bold; }
+
+    /* --- FEEDBACK STATES --- */
+    .correct {
+        border-left-color: #2e7d32 !important; 
+        background-color: #e8f5e9;
+        border-color: #a5d6a7;
+        cursor: default;
+    }
+
+    .incorrect {
+        border-left-color: #d32f2f !important; 
+        background-color: #ffebee;
+        border-color: #ef9a9a;
+    }
+
+    /* --- STATUS MESSAGE --- */
+    #status-msg {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #2e7d32;
+        color: #fff;
+        padding: 15px 25px;
+        border-radius: 30px;
+        font-weight: bold;
+        display: none;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        z-index: 200;
+        font-size: 1.2em;
+    }
+
+</style>
+</head>
+<body>
+
+    <h1>UDL In-Service Sort</h1>
+    <p><b>Instructions:</b> Drag the top card from the pile below into the correct UDL box.<br>
+    All information from one box in the original chart is now grouped onto a single card.</p>
+
+    <div class="drop-container">
+        <div class="drop-zone" id="zone-engagement" ondrop="drop(event)" ondragover="allowDrop(event)">
+            <div class="zone-header">Engagement<span class="sub-header">Goal: Support motivation, interest, and persistence.</span></div>
+        </div>
+
+        <div class="drop-zone" id="zone-representation" ondrop="drop(event)" ondragover="allowDrop(event)">
+            <div class="zone-header">Representation<span class="sub-header">Goal: Provide content in multiple formats to support understanding.</span></div>
+        </div>
+
+        <div class="drop-zone" id="zone-expression" ondrop="drop(event)" ondragover="allowDrop(event)">
+            <div class="zone-header">Expression<span class="sub-header">Goal: Allow students multiple ways to demonstrate learning.</span></div>
+        </div>
+    </div>
+
+    <div class="pile-container">
+        <h3>Card Pile</h3>
+        <div id="card-pile" ondrop="returnToPile(event)" ondragover="allowDrop(event)">
+            </div>
+    </div>
+
+    <div id="status-msg">🎉 Congratulations! All items sorted correctly!</div>
+
+<script>
+    // DATA: Grouped exactly by box content from the source doc
+    const cardsData = [
+        // --- ENGAGEMENT ---
+        { 
+            type: 'engagement', 
+            text: '<b>Choice-Based Learning Tasks</b><br>Provide a menu of activity options (e.g., create a poster, record a podcast, build a model, write a journal entry).<br><br>Allow students to choose the partner structure (solo, pairs, small group).' 
+        },
+        { 
+            type: 'engagement', 
+            text: '<b>Gamified Learning Challenges</b><br>Turn objectives into missions (e.g., “Solve 3 of the 5 challenges to unlock the next clue”).<br><br>Include a progress tracker or digital badges for task completion.' 
+        },
+        { 
+            type: 'engagement', 
+            text: '<b>Real-Life Connection Starters</b><br>Lessons include real-world examples that are connected to students\' interests.<br><br>Example: “You’re planning a trip—how can ratios help you stay on budget?”' 
+        },
+        { 
+            type: 'engagement', 
+            text: '<b>Mindfulness & Check-In Options</b><br>Quick emotional check-in: emoji chart, hand signals, or a digital “mood board.”<br><br>Provide optional breaks or movement tasks.' 
+        },
+        { 
+            type: 'engagement', 
+            text: '<b>Peer Collaboration Stations</b><br>Different station types:<br><ul><li>Discussion Station</li><li>Hands-On Station</li><li>Tech Exploration Station</li></ul><br>Students rotate at their own pace.' 
+        },
+        // Engagement Examples
+        { type: 'engagement', text: '<span class="ex-label">Ex:</span> At the end of every marking period, students with IEP\'s are provided with data on how they are progressing towards their goals.' },
+        { type: 'engagement', text: '<span class="ex-label">Ex:</span> Looking together at a calendar, a learning support teacher has each middle school student in her resource period choose three dates in the upcoming marking period for document decluttering and a binder organization check-in with the teacher.' },
+        { type: 'engagement', text: '<span class="ex-label">Ex:</span> In English class, high school students create a research-based slide presentation on a career of their choice (ideally one they are interested in pursuing after graduation).' },
+
+
+        // --- REPRESENTATION ---
+        { 
+            type: 'representation', 
+            text: '<b>Multimodal Lesson Materials</b><br>Provide a short text, a visual infographic, and a short explainer video covering the same concept.<br><br>Example for science: diagram of the water cycle + 2-minute video + paragraph summary.<br><br>Reading passages are provided in print, audio, and with picture supports for students with decoding difficulties.' 
+        },
+        { 
+            type: 'representation', 
+            text: '<b>Annotated Graphic Organizers</b><br>Concept maps with icons or color coding.<br><br>Step-by-step problem-solving guides with annotated examples.' 
+        },
+        { 
+            type: 'representation', 
+            text: '<b>Vocabulary & Language Supports</b><br><ul><li>Digital glossary with audio pronunciation.</li><li>Picture dictionary for key terms.</li><li>Sentence stems (“One example of ___ is…”).</li><li>Key vocabulary words are taught using student friendly definitions, and real world examples.</li></ul>' 
+        },
+        { 
+            type: 'representation', 
+            text: '<b>Scaffolds for Complex Content</b><br>Provide “levels of difficulty” versions of the same reading passage (leveled text sets).<br><br>Chunk multi-step instructions into checklists.' 
+        },
+        { 
+            type: 'representation', 
+            text: '<b>Hands-On or Sensory Models</b><br>Math manipulatives, tactile objects, or 3D models.<br><br>Virtual simulations for abstract concepts.' 
+        },
+        // Representation Examples
+        { type: 'representation', text: '<span class="ex-label">Ex:</span> In English class, middle school students are given Lego pieces to help them understand the structure and relationship of words (single-stud pieces), phrases (multi-stud pieces in a single row), and clauses (multi-stud pieces in a square shape to represent the required subject-predicate components) in various sentences.' },
+        { type: 'representation', text: '<span class="ex-label">Ex:</span> After identifying and analyzing motifs in three short stories by Ray Bradbury, students complete a Kahoot activity with images of each motif to provide concrete examples of the ideas discussed in class.' },
+
+
+        // --- EXPRESSION ---
+        { 
+            type: 'expression', 
+            text: '<b>Multimodal Summative Options</b><br>Students choose one of the following to show mastery:<br><ul><li>Write an essay</li><li>Create a slideshow</li><li>Film a short video</li><li>Build a physical or digital model</li><li>Make a comic strip</li><li>Record a podcast</li><li>Design an infographic</li></ul>Students may demonstrate their understanding of the lesson by giving an oral response instead of a written response.' 
+        },
+        { 
+            type: 'expression', 
+            text: '<b>Scaffolded Writing Supports</b><br><ul><li>Graphic organizers (intro–body–conclusion frames)</li><li>Sentence stems and word banks</li><li>Students can use speech-to-text or typing instead of handwriting an essay</li></ul>' 
+        },
+        { 
+            type: 'expression', 
+            text: '<b>Real-Time Formative Checks</b><br><ul><li>Whiteboard quick-draws</li><li>One-minute audio reflections</li><li>Digital quizzes with immediate feedback</li><li>Physical exit tickets with choices (draw, write, or explain verbally)</li></ul>' 
+        },
+        { 
+            type: 'expression', 
+            text: '<b>Collaboration-Based Products</b><br><ul><li>Group debate</li><li>Collaborative Google Doc research summary</li><li>Role-play scenarios</li></ul>' 
+        },
+        { 
+            type: 'expression', 
+            text: '<b>Self-Assessment and Reflection Tools</b><br><ul><li>Rubric with student-friendly language</li><li>Reflection prompts (“What strategy worked best for you today?”)</li><li>Digital or physical learning journals</li></ul>' 
+        },
+        // Expression Examples
+        { type: 'expression', text: '<span class="ex-label">Ex:</span> Middle school health students draw “before and after” pictures to explain the changes that take place in the lungs of someone who chooses to smoke.' },
+        { type: 'expression', text: '<span class="ex-label">Ex:</span> After completing a mock job interview with their high school English teacher, students write a brief reflection on the experience and evaluate their performance using an interview rubric.' }
+    ];
+
+    function initGame() {
+        const pile = document.getElementById('card-pile');
+        
+        // Shuffle cards
+        cardsData.sort(() => Math.random() - 0.5);
+
+        // Create HTML elements
+        cardsData.forEach((data, index) => {
+            const el = document.createElement('div');
+            el.classList.add('card');
+            el.setAttribute('draggable', 'true');
+            el.setAttribute('id', 'card-' + index);
+            el.setAttribute('data-type', data.type);
+            el.innerHTML = data.text;
+
+            // Drag Events
+            el.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', e.target.id);
+                // Slight transparency on drag
+                requestAnimationFrame(() => {
+                    e.target.style.opacity = '0.5';
+                });
+            });
+
+            el.addEventListener('dragend', (e) => {
+                e.target.style.opacity = '1';
+            });
+
+            pile.appendChild(el);
+        });
+    }
+
+    function allowDrop(e) {
+        e.preventDefault();
+    }
+
+    // Handles dropping into the main 3 boxes
+    function drop(e) {
+        e.preventDefault();
+        
+        const cardId = e.dataTransfer.getData('text/plain');
+        const card = document.getElementById(cardId);
+        
+        if (!card) return; 
+
+        const zone = e.target.closest('.drop-zone');
+        if (!zone) return;
+
+        // Move DOM element to the drop zone
+        zone.appendChild(card);
+        // Reset rotation if it was rotated in the stack
+        card.style.transform = 'none';
+
+        // Check Logic
+        const zoneType = zone.id.replace('zone-', ''); 
+        const cardType = card.getAttribute('data-type');
+
+        // Reset classes
+        card.classList.remove('incorrect');
+        card.classList.remove('correct');
+
+        if (zoneType === cardType) {
+            // CORRECT
+            card.classList.add('correct');
+            card.setAttribute('draggable', 'false'); // Lock it
+            checkWin();
+        } else {
+            // INCORRECT
+            card.classList.add('incorrect');
+            card.setAttribute('draggable', 'true'); // Keep movable
+        }
+    }
+
+    // Handles dropping back into the pile
+    function returnToPile(e) {
+        e.preventDefault();
+        const cardId = e.dataTransfer.getData('text/plain');
+        const card = document.getElementById(cardId);
+        if (!card) return;
+
+        const pile = document.getElementById('card-pile');
+        pile.appendChild(card); // Moves it back to stack
+
+        // Remove status
+        card.classList.remove('incorrect');
+        card.classList.remove('correct');
+        card.setAttribute('draggable', 'true');
+        card.style.opacity = '1';
+    }
+
+    function checkWin() {
+        const totalCorrect = document.querySelectorAll('.card.correct').length;
+        if (totalCorrect === cardsData.length) {
+            document.getElementById('status-msg').style.display = 'block';
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        }
+    }
+
+    initGame();
+
+</script>
+
+</body>
+</html>
